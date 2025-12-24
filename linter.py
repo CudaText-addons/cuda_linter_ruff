@@ -355,11 +355,11 @@ class Command:
                 if fixed_code and fixed_code != code:
                     # Replace using ed.replace() to support undo
                     line_count = ed.get_line_count()
-                    last_line_len = len(ed.get_text_line(line_count - 1))
+                    last_line_len = ed.get_line_len(line_count - 1)
 
                     ed.replace(
                         0, 0,
-                        line_count - 1, last_line_len,
+                        last_line_len, line_count - 1, # X then Y
                         fixed_code
                     )
 
