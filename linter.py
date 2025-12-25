@@ -26,11 +26,13 @@ class Ruff(Linter):
     cmd = ('ruff', 'check', '--output-format=concise', '@')
 
     # Regex for Ruff concise format: filename:line:col: CODE message
-    # Example: test.py:10:5: E501 Line too long (120 > 88 characters)
+    # Examples:
+    #   test.py:10:5: E501 Line too long (120 > 88 characters)
+    #   test.py:4:7: invalid-syntax: missing closing quote in string literal
     # Regex maps E*/F* codes as errors, others as warnings
     regex = (
         r'^.+?:(?P<line>\d+):(?P<col>\d+): '
-        r'(?:(?P<error>E\d+|F\d+)|(?P<warning>[A-Z]+\d+)) '
+        r'(?:(?P<error>invalid\-syntax:|E\d+|F\d+)|(?P<warning>[A-Z]+\d+)) '
         r'(?P<message>.*)'
     )
 
