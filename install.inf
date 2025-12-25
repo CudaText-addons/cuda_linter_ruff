@@ -14,11 +14,13 @@ lexers=Python
 section=commands
 caption=Ruff\Fix current file
 method=fix_file
+lexers=Python
 
 [item4]
 section=commands
 caption=Ruff\Format current file
 method=format_file
+lexers=Python
 
 [item10]
 section=commands
