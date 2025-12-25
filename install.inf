@@ -24,10 +24,10 @@ method=format_file
 section=commands
 caption=Ruff\Config
 method=config
-menu=o
+menu=op
 
 [item11]
 section=commands
 caption=Ruff\Help
 method=help
-menu=o
+menu=op
