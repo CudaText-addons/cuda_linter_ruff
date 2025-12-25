@@ -26,13 +26,14 @@ class Ruff(Linter):
     cmd = ('ruff', 'check', '--output-format=concise', '@')
 
     # Regex for Ruff concise format: filename:line:col: CODE message
-    # Examples:
-    #   test.py:10:5: E501 Line too long (120 > 88 characters)
-    #   test.py:4:7: invalid-syntax: missing closing quote in string literal
+    # Example: test.py:10:5: E501 Line too long (120 > 88 characters)
+    # Example: test.py:4:8: F401 [*] `os` imported but unused
+    # Example: test.py:3:7: invalid-syntax: Simple statements must be separated
     # Regex maps E*/F* codes as errors, others as warnings
     regex = (
         r'^.+?:(?P<line>\d+):(?P<col>\d+): '
-        r'(?:(?P<error>invalid\-syntax:|E\d+|F\d+)|(?P<warning>[A-Z]+\d+)) '
+        r'(?:(?P<error>E\d+|F\d+)|(?P<warning>[\w-]+))'
+        r'\s*:?\s+'
         r'(?P<message>.*)'
     )
 
@@ -321,8 +322,132 @@ class Command:
         else:
             msg_box(f"Failed to open config file:\n{path}", MB_OK | MB_ICONWARNING)
 
+    def _apply_changes_preserving_states(self, old_text, new_text):
+        """Apply changes preserving line states using hybrid approach.
+
+        Fast path (same line count): Native API - O(1) replace + O(n) comparison
+        Slow path (lines added/removed): Myers diff - O(ND)
+        """
+        old_lines = old_text.splitlines(keepends=False)
+        new_lines = new_text.splitlines(keepends=False)
+
+        # Fast path 1: No changes at all
+        if old_text == new_text:
+            print("Ruff: Applying changes - No changes (skipped)")
+            return
+
+        # Fast path 2: Same line count (95% of cases)
+        # Use Native API for maximum speed
+        if len(old_lines) == len(new_lines):
+            print(f"Ruff: Applying changes - Fast path ({len(old_lines)} lines)")
+
+            # Save current line states
+            old_states = ed.get_prop(PROP_LINE_STATES)
+
+            # Single fast replace
+            line_count = ed.get_line_count()
+            last_line_len = ed.get_line_len(line_count - 1)
+
+            ed.replace(
+                0, 0,
+                last_line_len, line_count - 1,
+                new_text
+            )
+
+            # Restore states for unchanged lines
+            if old_states and len(old_states) >= len(old_lines):
+                new_states = []
+                for i in range(len(new_lines)):
+                    if i < len(old_lines) and old_lines[i] == new_lines[i]:
+                        # Line unchanged, keep old state
+                        new_states.append(old_states[i])
+                    else:
+                        # Line changed, mark as changed
+                        new_states.append(LINESTATE_CHANGED)
+
+                ed.set_prop(PROP_LINE_STATES, new_states)
+
+            return
+
+        # Slow path: Line count changed (5% of cases)
+        # Use Myers diff algorithm for perfect accuracy
+        print(f"Ruff: Applying changes - Slow path (Myers diff: {len(old_lines)} -> {len(new_lines)} lines)")
+
+        import difflib
+
+        matcher = difflib.SequenceMatcher(None, old_lines, new_lines)
+        opcodes = list(matcher.get_opcodes())
+
+        # Apply changes from TOP to BOTTOM with offset tracking
+        offset = 0  # Track how much we've shifted
+
+        for tag, i1, i2, j1, j2 in opcodes:
+            if tag == 'equal':
+                continue
+
+            # Adjust indices with current offset
+            adj_i1 = i1 + offset
+            adj_i2 = i2 + offset
+
+            if tag == 'replace':
+                # Delete old lines
+                for _ in range(i2 - i1):
+                    ed.delete(0, adj_i1, 0, adj_i1 + 1)
+
+                # Insert new lines
+                for idx in range(j1, j2):
+                    ed.insert(0, adj_i1, new_lines[idx] + '\n')
+                    adj_i1 += 1  # Move insertion point down
+
+                # Update offset: removed (i2-i1) lines, added (j2-j1) lines
+                offset += (j2 - j1) - (i2 - i1)
+
+            elif tag == 'delete':
+                for _ in range(i2 - i1):
+                    ed.delete(0, adj_i1, 0, adj_i1 + 1)
+
+                # Update offset
+                offset -= (i2 - i1)
+
+            elif tag == 'insert':
+                for idx in range(j1, j2):
+                    ed.insert(0, adj_i1, new_lines[idx] + '\n')
+                    adj_i1 += 1
+
+                # Update offset
+                offset += (j2 - j1)
+
+        # Ensure last line has newline (Myers may miss it)
+        if new_text.endswith('\n'):
+            last_line_idx = ed.get_line_count() - 1
+            last_line_text = ed.get_text_line(last_line_idx)
+            last_line_len = ed.get_line_len(last_line_idx)
+
+            # Replace last line with itself + newline
+            ed.replace(0, last_line_idx, last_line_len, last_line_idx, last_line_text + '\n')
+
+        ed.action(EDACTION_UPDATE)
+
     def fix_file(self):
-        """Run Ruff --fix on current buffer (non-destructive, supports undo)."""
+        """Run Ruff --fix on current buffer (safe fixes only)."""
+        self._fix_file(unsafe=False)
+
+    def fix_file_unsafe(self):
+        """Run Ruff --fix with unsafe fixes (review changes carefully!)."""
+        # Ask for confirmation
+        result = msg_box(
+            "Apply UNSAFE fixes?\n\n"
+            "Unsafe fixes may change code behavior.\n"
+            "Review changes carefully and use Ctrl+Z to undo if needed.\n\n"
+            "Continue?",
+            MB_YESNO | MB_ICONWARNING
+        )
+
+        if result == ID_YES:
+            self._fix_file(unsafe=True)
+
+    def _fix_file(self, unsafe=False):
+        """Internal method to apply fixes. Run Ruff --fix on current buffer (non-destructive, supports undo)."""
         import subprocess
 
         linter = Ruff(ed)
@@ -334,6 +459,9 @@ class Command:
 
         cmd = [linter.ruff_path, 'check', '--fix', '-']
 
+        if unsafe:
+            cmd.append('--unsafe-fixes')
+
         if linter.select_codes:
             cmd.extend(['--select', ','.join(linter.select_codes)])
         if linter.ignore_codes:
@@ -341,6 +469,8 @@ class Command:
 
         if ed.get_filename():
             cmd.extend(['--stdin-filename', ed.get_filename()])
+        else:
+            cmd.extend(['--stdin-filename', 'untitled.py'])
 
         try:
             result = subprocess.run(
@@ -355,16 +485,8 @@ class Command:
                 fixed_code = result.stdout
 
                 if fixed_code and fixed_code != code:
-                    # Replace using ed.replace() to support undo
-                    line_count = ed.get_line_count()
-                    last_line_len = ed.get_line_len(line_count - 1)
-
-                    ed.replace(
-                        0, 0,
-                        last_line_len, line_count - 1, # X then Y
-                        fixed_code
-                    )
-
+                    # Apply changes while preserving line states
+                    self._apply_changes_preserving_states(code, fixed_code)
                     msg_status("Ruff: Applied fixes (Ctrl+Z to undo)")
                 else:
                     msg_status("Ruff: No fixes needed")
@@ -391,6 +513,8 @@ class Command:
 
         if ed.get_filename():
             cmd.extend(['--stdin-filename', ed.get_filename()])
+        else:
+            cmd.extend(['--stdin-filename', 'untitled.py'])
 
         try:
             result = subprocess.run(
@@ -405,16 +529,8 @@ class Command:
                 formatted_code = result.stdout
 
                 if formatted_code and formatted_code != code:
-                    # Replace using ed.replace() to support undo
-                    line_count = ed.get_line_count()
-                    last_line_len = ed.get_line_len(line_count - 1)
-
-                    ed.replace(
-                        0, 0,
-                        last_line_len, line_count - 1, # X then Y
-                        formatted_code
-                    )
-
+                    # Apply changes line by line to preserve line states
+                    self._apply_changes_preserving_states(code, formatted_code)
                     msg_status("Ruff: Formatted (Ctrl+Z to undo)")
                 else:
                     msg_status("Ruff: Already formatted")
