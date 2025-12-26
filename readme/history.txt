@@ -1,9 +1,0 @@
-2025.12.25
-+ add: Fix current file (unsafe) command with confirmation dialog
-+ add: line state preservation when using Fix/Fix (unsafe)/Format commands
-* change: menu items moved to different locations (Config/Help in Options, Fix/Format in Plugins)
-- fix: regex pattern now matches syntax error codes with hyphens (e.g., invalid-syntax)
-- fix: ed.get_line_len() usage instead of len(ed.get_text_line()) (thanks Alexey-T)
-
-2025.12.24
-initial version
