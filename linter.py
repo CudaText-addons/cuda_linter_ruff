@@ -17,6 +17,9 @@ class Ruff(Linter):
     automatic executable detection (PATH or bundled version).
     """
 
+    # Default timeout for subprocess calls (seconds)
+    DEFAULT_TIMEOUT = 30
+
     # Support all Python lexer variants
     syntax = 'Python'
     CONFIG_FILE = 'ruff_config.json'
@@ -51,14 +54,14 @@ class Ruff(Linter):
         if not self.ruff_path:
             self.ignore_codes = []
             self.select_codes = []
-            self.timeout = 30
+            self.timeout = Ruff.DEFAULT_TIMEOUT
             return
 
         # Load configuration
         config = self._load_config()
         self.ignore_codes = config.get('ignore', [])
         self.select_codes = config.get('select', [])
-        self.timeout = config.get('timeout', 30)
+        self.timeout = config.get('timeout', Ruff.DEFAULT_TIMEOUT)
 
         # Use sensible defaults if no config exists
         if not self.ignore_codes and not self.select_codes:
@@ -102,12 +105,12 @@ class Ruff(Linter):
 
         # Guard clause: config file doesn't exist
         if not os.path.isfile(path):
-            return {'ignore': [], 'select': [], 'timeout': 30}
+            return {'ignore': [], 'select': [], 'timeout': Ruff.DEFAULT_TIMEOUT}
 
         # Read and parse config file
         content = self._read_config_file(path)
         if not content:
-            return {'ignore': [], 'select': [], 'timeout': 30}
+            return {'ignore': [], 'select': [], 'timeout': Ruff.DEFAULT_TIMEOUT}
 
         # Parse and validate
         return self._parse_and_validate_config(content)
@@ -117,14 +120,14 @@ class Ruff(Linter):
         try:
             # Try UTF-8 first (standard)
             with open(path, 'r', encoding='utf-8') as f:
-                lines = [ln for ln in f if ln.strip() and not ln.strip().startswith(('//', '#'))]
+                lines = [ln for ln in f if (stripped := ln.strip()) and not stripped.startswith(('//', '#'))]
                 return ''.join(lines).strip()
 
         except UnicodeDecodeError:
             # Fallback to system default encoding (legacy Windows)
             try:
                 with open(path, 'r') as f:
-                    lines = [ln for ln in f if ln.strip() and not ln.strip().startswith(('//', '#'))]
+                    lines = [ln for ln in f if (stripped := ln.strip()) and not stripped.startswith(('//', '#'))]
                     return ''.join(lines).strip()
             except Exception as e:
                 print(f"ERROR: Failed to read Ruff config with fallback encoding: {e}")
@@ -142,7 +145,7 @@ class Ruff(Linter):
         - Category prefixes: E, W, F, B, I, C90, N, etc.
         - All rules: ALL
         """
-        return bool(self._RULE_CODE_PATTERN.match(code))  
+        return self._RULE_CODE_PATTERN.match(code) is not None
 
     def _filter_valid_codes(self, codes):
         """Filter and validate rule codes."""
@@ -156,7 +159,7 @@ class Ruff(Linter):
             # Guard clause: config must be a dict
             if not isinstance(config, dict):
                 print("ERROR: Ruff config must be JSON object, not array/string")
-                return {'ignore': [], 'select': [], 'timeout': 30}
+                return {'ignore': [], 'select': [], 'timeout': Ruff.DEFAULT_TIMEOUT}
 
             # Extract and validate ignore codes
             ignore = config.get('ignore', [])
@@ -171,22 +174,20 @@ class Ruff(Linter):
                 select = []
 
             # Validate timeout
-            timeout = config.get('timeout', 30)
+            timeout = config.get('timeout', Ruff.DEFAULT_TIMEOUT)
             if not isinstance(timeout, (int, float)) or timeout <= 0:
-                print(f"NOTE: Ruff - Invalid timeout '{timeout}', using default: 30")
-                timeout = 30
+                print(f"NOTE: Ruff - Invalid timeout '{timeout}', using default: {Ruff.DEFAULT_TIMEOUT}")
+                timeout = Ruff.DEFAULT_TIMEOUT
 
             # Validate format: rule codes are strings
             valid_ignore = self._filter_valid_codes(ignore)
             valid_select = self._filter_valid_codes(select)
 
             # Warn about invalid codes
-            if len(valid_ignore) != len(ignore):
-                invalid = [c for c in ignore if c not in valid_ignore]
+            if invalid := [c for c in ignore if c not in valid_ignore]:
                 print(f"NOTE: Ruff - Invalid ignore codes: {invalid}")
 
-            if len(valid_select) != len(select):
-                invalid = [c for c in select if c not in valid_select]
+            if invalid := [c for c in select if c not in valid_select]:
                 print(f"NOTE: Ruff - Invalid select codes: {invalid}")
 
             # Log loaded codes
@@ -203,7 +204,7 @@ class Ruff(Linter):
 
         except json.JSONDecodeError as e:
             print(f"ERROR: Invalid JSON in Ruff config: {e}")
-            return {'ignore': [], 'select': [], 'timeout': 30}
+            return {'ignore': [], 'select': [], 'timeout': Ruff.DEFAULT_TIMEOUT}
 
     def _build_cmd(self):
         """Build command with select/ignore flags.
@@ -212,8 +213,8 @@ class Ruff(Linter):
         Ruff's 'ignoring file in favor of stdin' warning.
         """
         cmd = [
-            self.ruff_path, 
-            'check', 
+            self.ruff_path,
+            'check',
             '--output-format=concise'
         ]
 
@@ -292,7 +293,7 @@ class Command:
     """Menu commands for Ruff plugin."""
 
     DEFAULT_CONFIG = {
-        "timeout": 30,
+        "timeout": Ruff.DEFAULT_TIMEOUT,
         "ignore": [
             "E501",   # line too long (handled by formatter)
             "W191",   # tab indentation
@@ -576,7 +577,7 @@ class Command:
                 formatted_code = result.stdout
 
                 if formatted_code and formatted_code != code:
-                    # Apply changes line by line to preserve line states
+                    # Apply changes preserving line states
                     self._apply_changes_preserving_states(code, formatted_code)
                     msg_status("Ruff: Formatted (Ctrl+Z to undo)")
                 else:
@@ -588,6 +589,8 @@ class Command:
                 else:
                     msg_status(f"Ruff format error: {result.stderr or result.stdout}")
 
+        except subprocess.TimeoutExpired:
+            msg_box(f"Ruff format timed out (>{linter.timeout}s)", MB_OK | MB_ICONERROR)
         except Exception as e:
             msg_box(f"Ruff format failed:\n{e}", MB_OK | MB_ICONERROR)
 
@@ -611,7 +614,7 @@ class Command:
             "- Severity differentiation (E/F=error, rest=warning)\n\n"
             "CONFIGURATION:\n"
             "Access via: Options > Settings-plugins > Ruff > Config\n"
-            "- timeout: Subprocess timeout in seconds (default: 30)\n"
+            f"- timeout: Subprocess timeout in seconds (default: {Ruff.DEFAULT_TIMEOUT})\n"
             "- ignore: Rule codes to ignore\n"
             "- select: Rule codes to enable\n"
             "Supports // and # comments in JSON file\n\n"

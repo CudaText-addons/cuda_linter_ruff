@@ -6,6 +6,7 @@
 * change: simplified stdin-filename fallback using 'or' operator (thanks Alexey-T)
 * change: Fix/Format commands now restricted to Python lexer only (thanks Alexey-T)
 - fix: line state preservation now uses PROP_LINE_STATE instead of PROP_LINE_STATES
+- fix: timeout handling in format_file() now consistent with fix_file()
 
 2025.12.25
 + add: Fix current file (unsafe) command with confirmation dialog
