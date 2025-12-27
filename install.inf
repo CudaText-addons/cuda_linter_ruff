@@ -2,8 +2,8 @@
 title=Linter for Python, using Ruff
 desc=Lints Python scripts using Ruff
 type=cudatext-plugin
-subdir=cuda_linter_ruff
-homepage=https://github.com/CudaText-addons/cuda_linter_ruff
+subdir=cuda_lint_ruff
+homepage=https://github.com/CudaText-addons/cuda_lint_ruff
 
 [item1]
 section=events

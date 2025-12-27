@@ -20,6 +20,9 @@ class Ruff(Linter):
     # Default timeout for subprocess calls (seconds)
     DEFAULT_TIMEOUT = 30
 
+    # Empty configuration dict (avoid typos in keys)
+    EMPTY_CONFIG = {'ignore': [], 'select': [], 'timeout': DEFAULT_TIMEOUT}
+
     # Support all Python lexer variants
     syntax = 'Python'
     CONFIG_FILE = 'ruff_config.json'
@@ -105,12 +108,12 @@ class Ruff(Linter):
 
         # Guard clause: config file doesn't exist
         if not os.path.isfile(path):
-            return {'ignore': [], 'select': [], 'timeout': Ruff.DEFAULT_TIMEOUT}
+            return Ruff.EMPTY_CONFIG.copy()
 
         # Read and parse config file
         content = self._read_config_file(path)
         if not content:
-            return {'ignore': [], 'select': [], 'timeout': Ruff.DEFAULT_TIMEOUT}
+            return Ruff.EMPTY_CONFIG.copy()
 
         # Parse and validate
         return self._parse_and_validate_config(content)
@@ -159,7 +162,7 @@ class Ruff(Linter):
             # Guard clause: config must be a dict
             if not isinstance(config, dict):
                 print("ERROR: Ruff config must be JSON object, not array/string")
-                return {'ignore': [], 'select': [], 'timeout': Ruff.DEFAULT_TIMEOUT}
+                return Ruff.EMPTY_CONFIG.copy()
 
             # Extract and validate ignore codes
             ignore = config.get('ignore', [])
@@ -204,7 +207,7 @@ class Ruff(Linter):
 
         except json.JSONDecodeError as e:
             print(f"ERROR: Invalid JSON in Ruff config: {e}")
-            return {'ignore': [], 'select': [], 'timeout': Ruff.DEFAULT_TIMEOUT}
+            return Ruff.EMPTY_CONFIG.copy()
 
     def _build_cmd(self):
         """Build command with select/ignore flags.

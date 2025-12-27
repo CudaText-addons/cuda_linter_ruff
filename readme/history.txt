@@ -1,3 +1,7 @@
+2025.12.27
++ add: EMPTY_CONFIG constant to avoid typos in configuration keys (thanks Alexey-T)
+* change: plugin renamed from cuda_linter_ruff to cuda_lint_ruff
+
 2025.12.26
 + add: caret position preservation in Fix/Format commands
 + add: syntax error detection in Fix/Format with clear error messages
