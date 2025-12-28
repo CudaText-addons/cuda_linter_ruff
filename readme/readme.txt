@@ -36,6 +36,6 @@ To customize rules, create settings/ruff_config.json with:
 Ruff automatically reads pyproject.toml or ruff.toml from your project directory.
 Plugin select/ignore settings take precedence over project configuration.
 
-Author: Bruno Eduardo
+Author: Bruno Eduardo, https://github.com/Hanatarou
 
 License: MIT

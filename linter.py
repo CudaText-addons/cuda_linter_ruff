@@ -7,7 +7,7 @@ import json
 import re
 from cudatext import *
 
-# Plugin loaded (lazy loading via on_lexer/on_open)
+# Plugin loaded (lazy loading via CudaLint framework)
 print("Ruff: Plugin initialized")
 
 class Ruff(Linter):
@@ -311,13 +311,21 @@ class Command:
         ]
     }
 
-    def on_lexer(self, ed_self):
-        """Trigger plugin loading when Python lexer is activated."""
-        pass
+    def _get_undo_hotkey(self):
+        """Get configured hotkey for Undo command."""
+        try:
+            import cudatext_cmd as cmds
+            items = app_proc(PROC_GET_COMMANDS, "")
 
-    def on_open(self, ed_self):
-        """Trigger plugin loading when Python file is opened."""
-        pass
+            # Find Undo command
+            match = next(
+                (item for item in items if item["cmd"] == cmds.cCommand_Undo),
+                None
+            )
+
+            return match.get("key1", "Ctrl+Z") if match else "Ctrl+Z"
+        except Exception:
+            return "Ctrl+Z"
 
     def config(self):
         """Open/create configuration file."""
@@ -489,11 +497,14 @@ class Command:
 
     def fix_file_unsafe(self):
         """Run Ruff --fix with unsafe fixes (review changes carefully!)."""
+        # Get undo hotkey
+        hotkey = self._get_undo_hotkey()
+
         # Ask for confirmation
         result = msg_box(
             "Apply UNSAFE fixes?\n\n"
             "Unsafe fixes may change code behavior.\n"
-            "Review changes carefully and use Ctrl+Z to undo if needed.\n\n"
+            f"Review changes carefully and use {hotkey} to undo if needed.\n\n"
             "Continue?",
             MB_YESNO | MB_ICONWARNING
         )
@@ -541,7 +552,9 @@ class Command:
                     msg_status("Ruff: File has syntax errors - cannot apply fixes")
                 elif fixed_code and fixed_code != code:
                     self._apply_changes_preserving_states(code, fixed_code)
-                    msg_status("Ruff: Applied fixes (Ctrl+Z to undo)")
+                    # Get undo hotkey
+                    hotkey = self._get_undo_hotkey()
+                    msg_status(f"Ruff: Applied fixes ({hotkey} to undo)")
                 else:
                     msg_status("Ruff: No fixes needed")
             else:
@@ -582,7 +595,9 @@ class Command:
                 if formatted_code and formatted_code != code:
                     # Apply changes preserving line states
                     self._apply_changes_preserving_states(code, formatted_code)
-                    msg_status("Ruff: Formatted (Ctrl+Z to undo)")
+                    # Get undo hotkey
+                    hotkey = self._get_undo_hotkey()
+                    msg_status(f"Ruff: Formatted ({hotkey} to undo)")
                 else:
                     msg_status("Ruff: Already formatted")
             else:

@@ -4,37 +4,34 @@ desc=Lints Python scripts using Ruff
 type=cudatext-plugin
 subdir=cuda_lint_ruff
 homepage=https://github.com/CudaText-addons/cuda_lint_ruff
+author=Bruno Eduardo
+api=1.0.472
 
 [item1]
-section=events
-events=on_lexer,on_open
-lexers=Python
-
-[item2]
 section=commands
 caption=Ruff\Config
 method=config
 menu=o
 
-[item3]
+[item2]
 section=commands
 caption=Ruff\Fix current file
 method=fix_file
 lexers=Python
 
-[item4]
+[item3]
 section=commands
 caption=Ruff\Fix current file (unsafe)
 method=fix_file_unsafe
 lexers=Python
 
-[item5]
+[item4]
 section=commands
 caption=Ruff\Format current file
 method=format_file
 lexers=Python
 
-[item6]
+[item5]
 section=commands
 caption=Ruff\Help
 method=help

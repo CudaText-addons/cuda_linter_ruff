@@ -1,3 +1,8 @@
+2025.12.28
++ add: dynamic undo hotkey detection in fix/format messages
+* change: lazy loading now handled by CudaLint framework (removed on_lexer/on_open handlers)
+* change: updated install.inf with api=1.0.472 requirement
+
 2025.12.27
 + add: EMPTY_CONFIG constant to avoid typos in configuration keys (thanks Alexey-T)
 * change: plugin renamed from cuda_linter_ruff to cuda_lint_ruff

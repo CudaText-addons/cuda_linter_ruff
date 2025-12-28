@@ -73,5 +73,5 @@ Plugin settings take precedence over project `pyproject.toml`/`ruff.toml`.
 ## 📚 Additional Info
 - **Ruff project**: https://github.com/astral-sh/ruff
 - **Ruff documentation**: https://docs.astral.sh/ruff/
-- **Author**: Bruno Eduardo
+- **Author**: Bruno Eduardo, https://github.com/Hanatarou
 - **License**: MIT
